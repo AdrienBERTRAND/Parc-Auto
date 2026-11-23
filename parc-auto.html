@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><title>Suivi du parc automobile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mu:#667085;--bd:#e2e5ea;--ac:#1f5fbf;--rd:#c62828;--or:#d97706;--gn:#2e7d32}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171d;--card:#1d222b;--tx:#e8eaee;--mu:#9aa3b2;--bd:#2c3340;--ac:#6ea0f0;--rd:#ef6b6b;--or:#f0a53a;--gn:#6fc476}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:14px 18px;background:var(--card);border-bottom:1px solid var(--bd);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+h1{font-size:18px;margin:0;flex:1}nav button{margin-right:6px}
+main{max-width:1100px;margin:0 auto;padding:16px}
+button,select,input,textarea{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:7px 10px}
+button{cursor:pointer}button.on,button.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi b{display:block;font-size:26px}.kpi span{color:var(--mu);font-size:13px}
+.w{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:640px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-size:12px;text-transform:uppercase}
+tr.c{cursor:pointer}tr.c:hover{background:var(--bg)}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;border:1px solid var(--bd)}
+.late{color:var(--rd);font-weight:600}.soon{color:var(--or);font-weight:600}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+label{font-size:12px;color:var(--mu);display:block}label input,label select{width:100%}
+.mu{color:var(--mu)}
+</style></head><body>
+<header><h1>🚗 Suivi du parc automobile</h1>
+<nav><button id="t-dash" class="on">Échéances</button><button id="t-list">Véhicules</button></nav>
+<button class="pri" id="add">+ Véhicule</button></header>
+<main id="m"><p class="mu">Chargement…</p></main>
+<script>
+var V=[],I=[],db=null,view="dash",sel=null,F={q:"",site:"",pool:"",out:false};
+var EC=[["dateCT","Contrôle technique"],["dateRevision","Révision"],["dateAssurance","Assurance"],["dateDistrib","Distribution"]];
+var $=function(s){return document.querySelector(s)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function days(d){if(!d)return null;return Math.round((new Date(d)-new Date(new Date().toISOString().slice(0,10)))/864e5)}
+function fd(d){return d?new Date(d).toLocaleDateString("fr-FR"):"–"}
+function cls(n){return n==null?"":n<0?"late":n<=60?"soon":""}
+function lbl(n){return n==null?"–":n<0?"en retard de "+(-n)+" j":"dans "+n+" j"}
+function name(v){return esc(v.immat)+" · "+esc([v.marque,v.modele].filter(Boolean).join(" "))}
+function tab(t){view=t;sel=null;$("#t-dash").className=t=="dash"?"on":"";$("#t-list").className=t=="list"?"on":"";render()}
+$("#t-dash").onclick=function(){tab("dash")};$("#t-list").onclick=function(){tab("list")};
+$("#add").onclick=function(){sel="new";view="det";render()};
+function render(){var h="";
+ if(view=="dash")h=dash();else if(view=="list")h=list();else h=detail();
+ $("#m").innerHTML=h;bind()}
+function alerts(){var a=[];V.filter(function(v){return !v.sorti}).forEach(function(v){EC.forEach(function(e){var n=days(v[e[0]]);if(n!=null&&n<=60)a.push({v:v,l:e[1],d:v[e[0]],n:n})})});return a.sort(function(x,y){return x.n-y.n})}
+function dash(){var act=V.filter(function(v){return !v.sorti}),a=alerts(),late=a.filter(function(x){return x.n<0}).length;
+ var h='<div class="kpis"><div class="card kpi"><b>'+act.length+'</b><span>véhicules actifs</span></div><div class="card kpi"><b class="late">'+late+'</b><span>échéances dépassées</span></div><div class="card kpi"><b class="soon">'+(a.length-late)+'</b><span>à venir (60 jours)</span></div><div class="card kpi"><b>'+act.filter(function(v){return v.energie=="Électrique"}).length+'</b><span>électriques</span></div></div>';
+ h+='<div class="card"><b>Échéances à traiter</b><div class="w"><table><tr><th>Véhicule</th><th>Échéance</th><th>Date</th><th>Délai</th></tr>';
+ a.forEach(function(x){h+='<tr class="c" data-id="'+x.v.id+'"><td>'+name(x.v)+'</td><td>'+x.l+'</td><td>'+fd(x.d)+'</td><td class="'+cls(x.n)+'">'+lbl(x.n)+'</td></tr>'});
+ if(!a.length)h+='<tr><td colspan="4" class="mu">Aucune échéance proche 🎉</td></tr>';
+ return h+'</table></div></div>'}
+function opts(k){var s={};V.forEach(function(v){if(v[k])s[v[k]]=1});return Object.keys(s).sort()}
+function list(){var h='<div class="bar"><input id="q" placeholder="Rechercher…" value="'+esc(F.q)+'">';
+ [["site","Site"],["pool","Pool"]].forEach(function(f){h+='<select id="f-'+f[0]+'"><option value="">'+f[1]+' : tous</option>'+opts(f[0]).map(function(o){return'<option'+(F[f[0]]==o?" selected":"")+'>'+esc(o)+'</option>'}).join("")+'</select>'});
+ h+='<label style="align-self:center"><input type="checkbox" id="out" style="width:auto"'+(F.out?" checked":"")+'> Voir les sortis</label></div>';
+ var r=V.filter(function(v){return (!!v.sorti)==F.out&&(!F.site||v.site==F.site)&&(!F.pool||v.pool==F.pool)&&(!F.q||JSON.stringify(v).toLowerCase().indexOf(F.q.toLowerCase())>=0)});
+ h+='<div class="card w"><table><tr><th>Véhicule</th><th>Site</th><th>Pool</th><th>Énergie</th><th>Statut</th><th>Prochain CT</th></tr>';
+ r.forEach(function(v){var n=days(v.dateCT);h+='<tr class="c" data-id="'+v.id+'"><td>'+name(v)+'</td><td>'+esc(v.site)+'</td><td>'+esc(v.pool)+'</td><td>'+esc(v.energie)+'</td><td>'+esc(v.statut)+'</td><td class="'+cls(n)+'">'+fd(v.dateCT)+'</td></tr>'});
+ return h+'</table></div><p class="mu">'+r.length+' véhicule(s)</p>'}
+var FL=[["immat","Immatriculation"],["marque","Marque"],["modele","Modèle"],["genre","Genre"],["site","Site (CHC/CHM)"],["pool","Pool / service"],["energie","Énergie"],["statut","Statut"],["km","Km actuel","number"],["dateCT","Prochain CT","date"],["dateRevision","Prochaine révision","date"],["kmRevision","Km révision","number"],["dateAssurance","Assurance","date"],["dateDistrib","Distribution","date"]];
+function detail(){var v=sel=="new"?{}:V.find(function(x){return x.id==sel});if(!v)return"";
+ var h='<p><button id="back">← Retour</button></p><div class="card"><b>'+(sel=="new"?"Nouveau véhicule":name(v))+'</b><div class="grid" style="margin-top:10px">';
+ FL.forEach(function(f){h+='<label>'+f[1]+'<input data-f="'+f[0]+'" type="'+(f[2]||"text")+'" value="'+esc(v[f[0]])+'"></label>'});
+ h+='</div><p><button class="pri" id="save">Enregistrer</button> ';
+ if(sel!="new")h+='<button id="sortir">'+(v.sorti?"Remettre en service":"Marquer comme sorti")+'</button>';
+ h+='</p></div>';
+ if(sel!="new"){h+='<div class="card"><b>Historique des entretiens</b><div class="bar" style="margin-top:10px"><input id="i-d" type="date"><input id="i-k" type="number" placeholder="Km"><input id="i-t" placeholder="Type (vidange…)"><input id="i-o" placeholder="Observations" style="flex:1"><button class="pri" id="i-add">Ajouter</button></div><div class="w"><table><tr><th>Date</th><th>Km</th><th>Type</th><th>Observations</th></tr>';
+  I.filter(function(x){return x.vid==v.id}).sort(function(a,b){return (b.date||"")<(a.date||"")?-1:1}).forEach(function(x){h+='<tr><td>'+fd(x.date)+'</td><td>'+esc(x.km)+'</td><td>'+esc(x.type)+'</td><td style="white-space:normal">'+esc(x.obs)+'</td></tr>'});
+  h+='</table></div></div>'}
+ return h}
+function bind(){
+ document.querySelectorAll("tr.c").forEach(function(r){r.onclick=function(){sel=r.dataset.id;view="det";render()}});
+ var q=$("#q");if(q){q.oninput=function(){F.q=q.value;var p=q.selectionStart;render();var n=$("#q");n.focus();n.setSelectionRange(p,p)}}
+ ["site","pool"].forEach(function(k){var e=$("#f-"+k);if(e)e.onchange=function(){F[k]=e.value;render()}});
+ var o=$("#out");if(o)o.onchange=function(){F.out=o.checked;render()};
+ var b=$("#back");if(b)b.onclick=function(){tab("list")};
+ var s=$("#save");if(s)s.onclick=function(){if(!db)return alert("Base de données indisponible : connectez-vous pour enregistrer.");
+  var d={};document.querySelectorAll("[data-f]").forEach(function(e){d[e.dataset.f]=e.type=="number"&&e.value!==""?Number(e.value):e.value});
+  var cur=sel=="new"?{}:V.find(function(x){return x.id==sel}),id=sel=="new"?null:sel;delete cur.id;var data=Object.assign({},cur,d);
+  var p=id?db.doc("vehicles/"+id).set(data):db.collection("vehicles").add(data);
+  p.then(function(){tab("list")},function(e){alert("Enregistrement refusé : "+(e&&e.message||e))})};
+ var so=$("#sortir");if(so)so.onclick=function(){var v=V.find(function(x){return x.id==sel}),d=Object.assign({},v);delete d.id;d.sorti=!v.sorti;db.doc("vehicles/"+sel).set(d).then(function(){tab("list")})};
+ var ia=$("#i-add");if(ia)ia.onclick=function(){if(!db||!$("#i-d").value)return;
+  db.collection("interventions").add({vid:sel,date:$("#i-d").value,km:$("#i-k").value,type:$("#i-t").value,obs:$("#i-o").value}).catch(function(e){alert("Refusé : "+(e&&e.message||e))})}}
+(async function(){
+ render();
+ try{db=await claude.use("db")}catch(e){db=null}
+ if(!db){$("#m").innerHTML='<p class="mu">Connectez-vous pour accéder aux données partagées.</p>';return}
+ var t=setTimeout(function(){if(!V.length)render()},10000);
+ db.collection("vehicles").onSnapshot(function(s){clearTimeout(t);V=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});if(view!="det")render()});
+ db.collection("interventions").onSnapshot(function(s){I=s.docs.map(function(d){return Object.assign({id:d.id},d.data())});if(view=="det"&&document.activeElement&&document.activeElement.tagName=="INPUT")return;if(view=="det")render()});
+})();
+</script></body></html>
